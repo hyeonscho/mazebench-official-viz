@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MazeBench run viewer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23315991'/><rect x='5' y='5' width='6' height='6' fill='%236cd7ff'/></svg>">
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1d212b; --line: #2a2f3a;
+    --ink: #e8e9ec; --ink2: #9aa1ad; --ink3: #6a7180;
+    --gem: #6cd7ff; --player: #5aa95c; --death: #ef4444;
+    --rotate: #d29a38; --undo: #8a63d2; --think: #6a9bd8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 -apple-system, "Segoe UI", "Noto Sans KR", sans-serif;
+  }
+  header { padding: 14px 20px 10px; border-bottom: 1px solid var(--line); }
+  header .toprow { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  header h1 { margin: 0; font-size: 17px; font-weight: 650; }
+  #runswitch { display: flex; gap: 6px; }
+  #runswitch button { font-weight: 650; padding: 5px 16px; }
+  #runswitch button.active { background: var(--gem); color: #0b0d12; border-color: var(--gem); }
+  header .chips { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--ink2); }
+  header .chips b { color: var(--ink); font-weight: 600; }
+  .chip { background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 2px 10px; }
+
+  #scrub { padding: 10px 20px 6px; border-bottom: 1px solid var(--line); }
+  #scrub .row { display: flex; align-items: center; gap: 10px; }
+  button, select {
+    background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { border-color: #4a5160; }
+  #turnlabel { min-width: 92px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
+  input[type=range] { flex: 1; accent-color: var(--gem); }
+  #events { position: relative; height: 14px; margin: 6px 2px 0; }
+  #events .tick { position: absolute; top: 2px; width: 4px; height: 10px; border-radius: 2px; transform: translateX(-50%); cursor: pointer; }
+  #legend { display: flex; gap: 12px; font-size: 11px; color: var(--ink2); margin-top: 4px; flex-wrap: wrap; }
+  #legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+
+  main { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0; }
+  #view3d { position: relative; min-height: 480px; border-right: 1px solid var(--line); }
+  #view3d canvas { display: block; }
+  #camhud { position: absolute; top: 10px; left: 10px; display: flex; gap: 8px; align-items: center; }
+  #camhud .note { font-size: 11px; color: var(--ink2); background: rgba(15,17,21,.75); padding: 3px 8px; border-radius: 6px; }
+  #right { padding: 12px 16px; min-width: 0; }
+  #metaline { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--ink2); margin-bottom: 8px; align-items: center; }
+  .badge { border-radius: 6px; padding: 2px 8px; font-weight: 600; font-size: 12px; }
+  .b-move { background: #24402a; color: #8fd79a; }
+  .b-block { background: #453a1e; color: #e6c46a; }
+  .b-dead { background: #4a1f1f; color: #ff9a9a; }
+  .b-meta { background: #2b2440; color: #c1a8ff; }
+  .b-think { background: #1e3048; color: #9cc4f0; }
+  .b-invalid { background: #45231e; color: #f0a68f; }
+  #board {
+    background: #05070a; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; overflow-x: auto; min-height: 120px;
+  }
+  #board pre { margin: 0; font: 9.5px/1.05 "SF Mono", Consolas, monospace; }
+  #board .P { outline: 1px solid #fff; }
+  #board .sentence { font: 13px/1.6 inherit; color: var(--ink); white-space: pre-wrap; }
+
+  #bottom { border-top: 1px solid var(--line); padding: 12px 20px 20px; display: grid; gap: 10px; }
+  #resp { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #resp .cmd {
+    font: 600 14px/1.3 "SF Mono", Consolas, monospace; background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px;
+    max-width: 60ch; overflow-wrap: anywhere;
+  }
+  .statbar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2); }
+  .statbar .track { width: 140px; height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; }
+  .statbar .fill { height: 100%; border-radius: 3px; background: var(--undo); }
+  details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+  details summary { cursor: pointer; color: var(--ink2); font-size: 13px; }
+  details pre, details .prose {
+    margin: 8px 0 0; font: 11px/1.35 "SF Mono", Consolas, monospace;
+    white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink);
+    max-height: 320px; overflow: auto;
+  }
+  details .prose { font: 13px/1.55 inherit; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } #view3d { border-right: 0; border-bottom: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<header>
+  <div class="toprow">
+    <h1 id="title"></h1>
+    <div id="runswitch"></div>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<div id="scrub">
+  <div class="row">
+    <button id="play">▶ 재생</button>
+    <select id="speed"><option value="900">1×</option><option value="450">2×</option><option value="180">5×</option></select>
+    <span id="turnlabel"></span>
+    <input type="range" id="slider" min="0" value="0">
+  </div>
+  <div id="events"></div>
+  <div id="legend">
+    <span><i style="background:var(--gem)"></i>보상</span>
+    <span><i style="background:var(--death)"></i>사망</span>
+    <span><i style="background:var(--rotate)"></i>카메라 회전</span>
+    <span><i style="background:var(--undo)"></i>undo</span>
+    <span><i style="background:var(--think)"></i>think</span>
+    <span><i style="background:#7a4437"></i>invalid</span>
+    <span><i style="background:#555"></i>이동</span>
+    <span style="margin-left:auto">←/→ 턴 이동 · space 재생</span>
+  </div>
+</div>
+
+<main>
+  <div id="view3d">
+    <div id="camhud">
+      <button id="cammode">카메라: 에이전트 시점</button>
+      <span class="note">드래그=둘러보기 · 휠=줌 · 턴을 넘기면 에이전트 시점으로 복귀</span>
+    </div>
+  </div>
+  <div id="right">
+    <div id="metaline"></div>
+    <div id="board"><pre id="boardpre"></pre></div>
+  </div>
+</main>
+
+<div id="bottom">
+  <div id="resp"></div>
+  <details id="d-think"><summary>모델 사고과정 (reasoning 요약)</summary><div class="prose" id="thinktext"></div></details>
+  <details><summary>이 턴에 모델이 본 관측 (모델 입력)</summary><pre id="obs-in"></pre></details>
+  <details><summary>행동 후 돌아온 관측 (다음 턴 입력)</summary><pre id="obs-out"></pre></details>
+  <details><summary>시스템 프롬프트 (공식 multiturn_system, 전 턴 공통)</summary><pre id="sysprompt"></pre></details>
+</div>
+
+<script src="./data_naive.js"></script>
+<script type="module">
+import * as THREE from "./three.module.min.js";
+
+const RUNS = window.RUNS || {};
+const RUN_IDS = Object.keys(RUNS);
+const PITCH_TILT = Math.atan2(1, 3);
+
+const TYPE_COLORS = {
+  floor: "#d6bd94", exit: "#d6bd94", floating_floor: "#d6bd94", orange_button: "#d6bd94",
+  ice: "#a9d6f4", ice_block: "#a9d6f4", ice_slope: "#a9d6f4",
+  wall: "#23262c", orange_wall: "#b85f16", player_gate: "#c75652", player_lift: "#8a63d2",
+  shrub: "#476b35", tree: "#2f7d3f", box: "#2a2d33", clone: "#b59a2a",
+  gem: "#6cd7ff", player: "#5aa95c", puncher: "#ef4444",
+  weightless_box: "#315991", block_asset: "#5b2f14",
+};
+
+let RUN = RUNS[RUN_IDS[0]];
+let t = 0;
+const cur = () => RUN.turns[t];
+const N = () => RUN.turns.length - 1;
+
+// ---------- 3D scene ----------
+const wrap = document.getElementById("view3d");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#0b0d12");
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 500);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+wrap.appendChild(renderer.domElement);
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.position.set(10, 30, 6);
+scene.add(sun);
+
+const mats = {};
+const matFor = (type) => mats[type] ??=
+  new THREE.MeshLambertMaterial({ color: TYPE_COLORS[type] || "#888" });
+const cube = new THREE.BoxGeometry(1, 1, 1);
+const slab = new THREE.BoxGeometry(1, 0.35, 1);
+
+const terrainGroup = new THREE.Group();
+const actorGroup = new THREE.Group();
+scene.add(terrainGroup, actorGroup);
+let actorMeshes = [];
+let W = 16, H = 16;
+
+function buildTerrain(levelState) {
+  terrainGroup.clear();
+  W = levelState.width; H = levelState.height;
+  levelState.terrain.forEach((row, y) => row.forEach((cell, x) => {
+    (cell.layers || []).forEach((layer) => {
+      const isSurface = ["floor", "ice", "exit"].includes(layer.type) && layer.elevation === 0;
+      const mesh = new THREE.Mesh(isSurface ? slab : cube, matFor(layer.type));
+      mesh.position.set(x + 0.5, isSurface ? -0.225 : layer.elevation + 0.5, y + 0.5);
+      if (layer.type === "wall") {
+        mesh.add(new THREE.LineSegments(
+          new THREE.EdgesGeometry(cube),
+          new THREE.LineBasicMaterial({ color: "#3a4150" })));
+      }
+      terrainGroup.add(mesh);
+    });
+  }));
+}
+
+function buildActors(run) {
+  actorGroup.clear();
+  actorMeshes = run.actorsStatic.map((a) => {
+    let mesh;
+    if (a.type === "gem") {
+      mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.3),
+        new THREE.MeshLambertMaterial({ color: TYPE_COLORS.gem, emissive: "#1d6b8a" }));
+    } else if (a.type === "player") {
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.95, 0.66),
+        new THREE.MeshLambertMaterial({ color: TYPE_COLORS.player, transparent: true }));
+    } else {
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.86, 0.86), matFor(a.type).clone());
+    }
+    mesh.userData = a;
+    actorGroup.add(mesh);
+    return mesh;
+  });
+}
+
+function applyActors(entry) {
+  entry.actors.forEach(([x, y, elev, removed], i) => {
+    const mesh = actorMeshes[i];
+    if (!mesh) return;
+    const a = mesh.userData;
+    if (a.type === "player") {
+      mesh.material.opacity = removed ? 0.35 : 1;
+      mesh.material.color.set(removed ? "#ef4444" : TYPE_COLORS.player);
+      mesh.visible = true;
+      mesh.position.set(x + 0.5, elev + 0.475, y + 0.5);
+    } else {
+      mesh.visible = !removed;
+      mesh.position.set(x + 0.5, elev + (a.type === "gem" ? 0.45 : 0.43), y + 0.5);
+    }
+  });
+}
+
+// camera
+let camMode = "agent";
+const cam = { az: 0, tilt: PITCH_TILT, dist: 26 };
+const target = { az: 0, tilt: PITCH_TILT, dist: 26 };
+const center = () => new THREE.Vector3(W / 2, 0, H / 2);
+function placeCamera() {
+  const c = center(), d = cam.dist, tl = cam.tilt, az = cam.az;
+  camera.position.set(
+    c.x + Math.sin(az) * Math.sin(tl) * d,
+    c.y + Math.cos(tl) * d,
+    c.z + Math.cos(az) * Math.sin(tl) * d);
+  camera.lookAt(c);
+}
+const modeBtn = document.getElementById("cammode");
+function setCamMode(mode) {
+  camMode = mode;
+  modeBtn.textContent = mode === "agent" ? "카메라: 에이전트 시점" : "카메라: 자유 시점 (클릭=복귀)";
+}
+modeBtn.onclick = () => { setCamMode(camMode === "agent" ? "free" : "agent"); syncAgentCam(); };
+let dragging = false, px = 0, py = 0;
+renderer.domElement.addEventListener("pointerdown", (e) => { dragging = true; px = e.clientX; py = e.clientY; });
+window.addEventListener("pointerup", () => dragging = false);
+window.addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  setCamMode("free");
+  target.az -= (e.clientX - px) * 0.008;
+  target.tilt = Math.min(1.45, Math.max(0.1, target.tilt + (e.clientY - py) * 0.005));
+  px = e.clientX; py = e.clientY;
+});
+renderer.domElement.addEventListener("wheel", (e) => {
+  e.preventDefault(); setCamMode("free");
+  target.dist = Math.min(60, Math.max(8, target.dist + e.deltaY * 0.03));
+}, { passive: false });
+function syncAgentCam() {
+  if (camMode !== "agent") return;
+  const desired = (cur().yaw ?? 0) * Math.PI / 2;
+  const TAU = Math.PI * 2;
+  const delta = ((desired - cam.az) % TAU + TAU + Math.PI) % TAU - Math.PI;
+  target.az = cam.az + delta;
+  target.tilt = PITCH_TILT;
+  target.dist = 26;
+}
+function resize() {
+  const w = wrap.clientWidth, h = Math.max(460, window.innerHeight - 340);
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+(function loop() {
+  requestAnimationFrame(loop);
+  cam.az += (target.az - cam.az) * 0.12;
+  cam.tilt += (target.tilt - cam.tilt) * 0.12;
+  cam.dist += (target.dist - cam.dist) * 0.12;
+  placeCamera();
+  renderer.render(scene, camera);
+})();
+
+// ---------- panels ----------
+const boardPre = document.getElementById("boardpre");
+function renderBoard(entry) {
+  const board = entry.obs.board;
+  if (!board) {
+    boardPre.innerHTML = `<span class="sentence">${entry.obs.notice.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</span>`;
+    return;
+  }
+  const pal = RUN.glyphPalette;
+  boardPre.innerHTML = board.split("\n").map(line =>
+    Array.from(line).map(ch => {
+      if (ch === " ") return " ";
+      const color = pal[ch] || "#8a90a0";
+      const cls = ch === "P" ? ' class="P"' : "";
+      return `<span${cls} style="color:${color}">${ch.replace("&", "&amp;").replace("<", "&lt;")}</span>`;
+    }).join("")
+  ).join("\n");
+}
+
+const fmtObs = (o) => [
+  o.notice, "",
+  ...(Object.keys(o.meta).length
+    ? ["Observation metadata:", ...Object.entries(o.meta).map(([k, v]) => `- ${k}: ${v}`), ""]
+    : []),
+  o.board, "", o.footer,
+].join("\n");
+
+function verdict(e) {
+  if (!e.action) return "";
+  if (e.think) return '<span class="badge b-think">think — 엔진 미진행</span>';
+  if (e.invalid) return '<span class="badge b-invalid">invalid</span>';
+  if (e.dead) return '<span class="badge b-dead">사망</span>';
+  if (e.action.startsWith("rotate")) return '<span class="badge b-meta">카메라 회전</span>';
+  if (["undo", "reset"].includes(e.action) || e.action.startsWith("go to"))
+    return '<span class="badge b-meta">' + e.action + "</span>";
+  return e.moved
+    ? '<span class="badge b-move">이동함</span>'
+    : '<span class="badge b-block">막힘 — 제자리</span>';
+}
+
+function renderPanels() {
+  const e = cur();
+  document.getElementById("turnlabel").textContent = `턴 ${t} / ${N()}`;
+  const cumReward = RUN.turns.slice(1, t + 1).reduce((s, x) => s + (x.reward || 0), 0);
+  document.getElementById("metaline").innerHTML = [
+    `yaw <b style="color:var(--ink)">${e.yaw ?? 0}</b>`,
+    `보상 누적 <b style="color:var(--ink)">${cumReward.toFixed(2)}</b>`,
+    `gem ${e.gems ?? 0}`,
+    `push 누적 ${e.novelPushTotal ?? 0}`,
+    e.novelty != null ? `novelty <b style="color:var(--ink)">${e.novelty.toFixed(1)}%</b> (≤10%면 auto-quit)` : "",
+    e.dead ? '<span class="badge b-dead">PLAYER DEAD</span>' : "",
+    e.autoQuit ? '<span class="badge b-meta">AUTO-QUIT</span>' : "",
+  ].filter(Boolean).map(s => `<span>${s}</span>`).join(" · ");
+  renderBoard(e);
+
+  const resp = document.getElementById("resp");
+  if (t === 0) {
+    resp.innerHTML = `<span style="color:var(--ink2)">run 시작 — 첫 관측이 모델에 전달됨</span>`;
+  } else {
+    const llm = e.llm;
+    resp.innerHTML = [
+      `<span style="color:var(--ink2)">모델 응답</span><span class="cmd">${(e.answer || "").replace(/</g, "&lt;")}</span>`,
+      verdict(e),
+      e.reward ? `<span style="color:var(--gem)">+${e.reward.toFixed(2)} 보상</span>` : "",
+      llm && llm.reasoning_tokens != null
+        ? `<span class="statbar">reasoning <span class="track"><span class="fill" style="width:${Math.min(100, llm.reasoning_tokens / 20).toFixed(0)}%"></span></span> ${llm.reasoning_tokens} tok · ${((llm.duration_ms || 0) / 1000).toFixed(1)}s</span>`
+        : "",
+    ].filter(Boolean).join("");
+  }
+  const think = document.getElementById("thinktext");
+  const summaries = (e.llm && e.llm.summaries) || [];
+  think.textContent = summaries.length
+    ? summaries.join("\n\n")
+    : (t === 0 ? "(턴 0)" : "(이 턴에는 기록된 요약이 없음)");
+  document.getElementById("obs-in").textContent =
+    t === 0 ? "(턴 0 — 아직 모델 호출 전)" : fmtObs(RUN.turns[t - 1].obs);
+  document.getElementById("obs-out").textContent = fmtObs(e.obs);
+}
+
+// ---------- scrubber ----------
+const slider = document.getElementById("slider");
+slider.oninput = () => setTurn(+slider.value);
+function buildTicks() {
+  const ev = document.getElementById("events");
+  ev.innerHTML = "";
+  RUN.turns.slice(1).forEach((e) => {
+    const tick = document.createElement("span");
+    tick.className = "tick";
+    tick.style.left = `${(e.t / N()) * 100}%`;
+    tick.style.background =
+      e.think ? "var(--think)" :
+      e.reward > 0 ? "var(--gem)" :
+      e.dead ? "var(--death)" :
+      e.invalid ? "#7a4437" :
+      (e.action || "").startsWith("rotate") ? "var(--rotate)" :
+      e.action === "undo" ? "var(--undo)" : "#555";
+    tick.title = `턴 ${e.t}: ${e.answer || e.action}` + (e.reward ? ` (+${e.reward})` : "");
+    tick.onclick = () => setTurn(e.t);
+    ev.appendChild(tick);
+  });
+}
+
+function setTurn(v) {
+  t = Math.min(N(), Math.max(0, v));
+  slider.value = t;
+  applyActors(cur());
+  setCamMode("agent");
+  syncAgentCam();
+  renderPanels();
+}
+
+// ---------- playback ----------
+let timer = null;
+const playBtn = document.getElementById("play");
+function stop() { clearInterval(timer); timer = null; playBtn.textContent = "▶ 재생"; }
+playBtn.onclick = () => {
+  if (timer) return stop();
+  if (t >= N()) setTurn(0);
+  playBtn.textContent = "⏸ 정지";
+  timer = setInterval(() => { t < N() ? setTurn(t + 1) : stop(); },
+    +document.getElementById("speed").value);
+};
+window.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight") { stop(); setTurn(t + 1); }
+  else if (e.key === "ArrowLeft") { stop(); setTurn(t - 1); }
+  else if (e.key === " " && e.target === document.body) { e.preventDefault(); playBtn.onclick(); }
+});
+
+// ---------- run switching ----------
+function loadRun(id) {
+  stop();
+  RUN = RUNS[id];
+  document.querySelectorAll("#runswitch button").forEach(b =>
+    b.classList.toggle("active", b.dataset.run === id));
+  const m = RUN.meta;
+  document.getElementById("title").textContent = `MazeBench — ${m.group}`;
+  document.title = `MazeBench — ${m.group}`;
+  const auto = m.autoQuit;
+  const sc = m.scorecard;
+  document.getElementById("chips").innerHTML = [
+    `<b>${m.exp}</b> (${m.model})`, `방 <b>${m.level}</b>`,
+    `턴 <b>${m.turns}</b>` + (m.thinks ? ` (think ${m.thinks})` : ""),
+    `보상 <b>${m.totalReward}</b>`,
+    sc ? `gems <b>${sc.gems.collected}/${sc.gems.total}</b>` : `gem <b>${m.gems}</b>`,
+    `방문 방 <b>${m.visitedRooms.length}</b>`,
+    `사망 <b>${m.deaths}</b>`,
+    auto ? `auto-quit @ ${auto.percentage.toFixed(1)}%` : "auto-quit 미발화",
+    m.episodes > 1 ? `episode ${m.episode + 1}/${m.episodes}` : "",
+  ].filter(Boolean).map(s => `<span class="chip">${s}</span>`).join("");
+  buildTerrain(RUN.levelState);
+  buildActors(RUN);
+  slider.max = N();
+  buildTicks();
+  document.getElementById("sysprompt").textContent = RUN.systemPrompt;
+  setTurn(0);
+}
+
+const sw = document.getElementById("runswitch");
+RUN_IDS.forEach((id) => {
+  const b = document.createElement("button");
+  b.textContent = id;
+  b.dataset.run = id;
+  b.onclick = () => loadRun(id);
+  sw.appendChild(b);
+});
+
+resize();
+loadRun(RUN_IDS[0]);
+</script>
+</body>
+</html>
