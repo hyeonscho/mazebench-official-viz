@@ -134,7 +134,7 @@
 
 <div id="bottom">
   <div id="resp"></div>
-  <details id="d-think"><summary>모델 사고과정 (reasoning 요약)</summary><div class="prose" id="thinktext"></div></details>
+  <details id="d-think"><summary>모델 사고과정 — 기록되는 전부 (원문 CoT는 OpenAI가 암호화해 비공개; 아래는 codex rollout에 남는 reasoning 요약 항목의 무삭제 전문)</summary><div class="prose" id="thinktext"></div></details>
   <details><summary>이 턴에 모델이 본 관측 (모델 입력)</summary><pre id="obs-in"></pre></details>
   <details><summary>행동 후 돌아온 관측 (다음 턴 입력)</summary><pre id="obs-out"></pre></details>
   <details><summary id="sysprompt-label">시스템 프롬프트 (전 턴 공통)</summary><pre id="sysprompt"></pre></details>
@@ -188,13 +188,22 @@ scene.add(terrainGroup, actorGroup);
 let actorMeshes = [];
 let W = 16, H = 16;
 let currentRoom = null;
+let currentSig = null;
 
-// A run can cross rooms; each room has its own terrain and actor roster.
+// A run can cross rooms (terrain) and the engine may reorder its actor list
+// on re-entry, so meshes are rebuilt whenever the per-turn TYPE SIGNATURE
+// changes — the turn data itself carries [type, x, y, elev, removed].
 function ensureRoom(room) {
   if (room === currentRoom) return;
   currentRoom = room;
   buildTerrain(RUN.levels[room]);
-  buildActors(RUN.actorsByRoom[room] || []);
+}
+
+function ensureActorMeshes(entry) {
+  const sig = entry.actors.map((a) => a[0]).join(",");
+  if (sig === currentSig) return;
+  currentSig = sig;
+  buildActors(entry.actors.map((a) => ({ type: a[0] })));
 }
 
 function buildTerrain(levelState) {
@@ -235,7 +244,8 @@ function buildActors(roster) {
 }
 
 function applyActors(entry) {
-  entry.actors.forEach(([x, y, elev, removed], i) => {
+  ensureActorMeshes(entry);
+  entry.actors.forEach(([, x, y, elev, removed], i) => {
     const mesh = actorMeshes[i];
     if (!mesh) return;
     const a = mesh.userData;
@@ -463,6 +473,7 @@ function loadRun(id) {
     m.episodes > 1 ? `episode ${m.episode + 1}/${m.episodes}` : "",
   ].filter(Boolean).map(s => `<span class="chip">${s}</span>`).join("");
   currentRoom = null;
+  currentSig = null;
   ensureRoom(RUN.startRoom);
   slider.max = N();
   buildTicks();
