@@ -131,12 +131,12 @@
   <details id="d-think"><summary>모델 사고과정 (reasoning 요약)</summary><div class="prose" id="thinktext"></div></details>
   <details><summary>이 턴에 모델이 본 관측 (모델 입력)</summary><pre id="obs-in"></pre></details>
   <details><summary>행동 후 돌아온 관측 (다음 턴 입력)</summary><pre id="obs-out"></pre></details>
-  <details><summary>시스템 프롬프트 (공식 multiturn_system, 전 턴 공통)</summary><pre id="sysprompt"></pre></details>
+  <details><summary id="sysprompt-label">시스템 프롬프트 (전 턴 공통)</summary><pre id="sysprompt"></pre></details>
 </div>
 
 <script src="./data_official-naive.js"></script>
-<script src="./data_hxh-terra-med.js"></script>
-<script src="./data_hxh-gpt55-windowed.js"></script>
+<script src="./data_permissive-naive.js"></script>
+<script src="./data_permissive-react.js"></script>
 <script type="module">
 import * as THREE from "./three.module.min.js";
 
@@ -447,7 +447,22 @@ function loadRun(id) {
   buildActors(RUN);
   slider.max = N();
   buildTicks();
-  document.getElementById("sysprompt").textContent = RUN.systemPrompt;
+  const sys = document.getElementById("sysprompt");
+  const sysLabel = document.getElementById("sysprompt-label");
+  if (RUN.promptDiff) {
+    // A modified prompt wears its deviation: insertions red, deletions
+    // red-struck — diffed against the official prompt at build time.
+    const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    sys.innerHTML = RUN.promptDiff.map(([op, text]) =>
+      op === "same" ? esc(text) :
+      op === "add" ? `<span style="color:#ff6b6b;font-weight:600">${esc(text)}</span>` :
+      `<span style="color:#ff6b6b;opacity:.55;text-decoration:line-through">${esc(text)}</span>`
+    ).join("");
+    sysLabel.innerHTML = '시스템 프롬프트 — <span style="color:#ff6b6b">공식에서 수정됨 (빨간색 = 바뀐 부분)</span>';
+  } else {
+    sys.textContent = RUN.systemPrompt;
+    sysLabel.textContent = "시스템 프롬프트 (공식 multiturn_system, 전 턴 공통)";
+  }
   setTurn(0);
 }
 
