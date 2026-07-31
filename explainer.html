@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MazeBench — 왜 rotate·3D인가</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23315991'/><rect x='5' y='5' width='6' height='6' fill='%236cd7ff'/></svg>">
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --line:#2a2f3a;
+    --ink:#e8e9ec; --ink2:#9aa1ad; --ink3:#6a7180; --gem:#6cd7ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:14px/1.6 -apple-system,"Segoe UI","Noto Sans KR",sans-serif; }
+  header { padding:14px 20px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:16px; }
+  header h1 { margin:0; font-size:17px; }
+  header a { color:var(--gem); font-size:13px; text-decoration:none; }
+  section { padding:16px 20px; border-bottom:1px solid var(--line); }
+  h2 { font-size:15px; margin:0 0 6px; }
+  .note { color:var(--ink2); font-size:13px; max-width:900px; }
+  .demo { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; margin-top:12px; }
+  #view3d { position:relative; min-height:420px; background:#0b0d12;
+    border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  #board { background:#05070a; border:1px solid var(--line); border-radius:8px;
+    padding:10px; overflow:auto; max-height:460px; }
+  #board pre { margin:0; font:9px/1.05 "SF Mono",Consolas,monospace; }
+  .hid { outline:1px solid #ffd166; border-radius:1px; }
+  button { background:var(--panel2); color:var(--ink); border:1px solid var(--line);
+    border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; }
+  button.active { background:var(--gem); color:#0b0d12; border-color:var(--gem); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .legend { display:flex; gap:10px; font-size:12px; color:var(--ink2); flex-wrap:wrap; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  @media (max-width:900px){ .demo { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>왜 rotate가 필요하고, 왜 "3D"인가</h1>
+  <a href="./index.html">← run 뷰어로</a>
+  <span class="note" style="font-size:12px">데모 방: level_NxI (경사 59 · 나무 10 · gem 1) — ascii는 전부 엔진이 실제로 렌더한 관측</span>
+</header>
+
+<section>
+  <h2>① 관측은 "카메라가 찍은 사진"이다 — 돌리기 전엔 안 보이는 것이 있다</h2>
+  <p class="note">아래 ascii는 이 방을 각 yaw에서 엔진이 실제 렌더한 것. 높은 벽·나무가 뒤 칸을 가리므로
+  <b>yaw 버튼을 눌러보면 보이는 글리프 집합이 달라진다</b>. <span class="hid" style="padding:0 4px">노란 테두리</span> =
+  yaw 0에서는 존재 자체가 안 보이던 종류의 물체. 공식 규칙이 "가려진 객체는 관측에 미포함"이라
+  모델은 회전으로만 이것들을 발견할 수 있다.</p>
+  <div class="row" id="yawbtns"></div>
+  <div class="demo">
+    <div id="view3d"></div>
+    <div id="board"><pre id="boardpre"></pre></div>
+  </div>
+</section>
+
+<section>
+  <h2>② 방에는 높이(elevation)가 있다 — 그래서 3D</h2>
+  <p class="note">셀마다 블록이 층층이 쌓이고(벽 1층, 나무 3층), 경사로(slope)로 층을 오르내린다.
+  아래 토글을 켜면 <b>높이별로 색을 다시 칠해</b> 층 구조가 드러난다. 이 높이 차가 ①의 가림을 만든다.</p>
+  <div class="row">
+    <button id="elevtoggle">높이별 색칠: OFF</button>
+    <div class="legend" id="elevlegend" style="display:none">
+      <span><i style="background:#3a5e40"></i>0층</span>
+      <span><i style="background:#5d8a52"></i>1층</span>
+      <span><i style="background:#a2b957"></i>2층</span>
+      <span><i style="background:#e4c95b"></i>3층+</span>
+    </div>
+    <span class="note" style="font-size:12px">드래그=회전 · 휠=줌</span>
+  </div>
+</section>
+
+<script src="./data_explainer.js"></script>
+<script type="module">
+import * as THREE from "./three.module.min.js";
+const D = window.EXPLAINER;
+const TYPE_COLORS = {
+  floor:"#d6bd94", exit:"#d6bd94", floating_floor:"#d6bd94", orange_button:"#d6bd94",
+  ice:"#a9d6f4", ice_block:"#a9d6f4", ice_slope:"#a9d6f4",
+  wall:"#23262c", orange_wall:"#b85f16", player_gate:"#c75652", player_lift:"#8a63d2",
+  shrub:"#476b35", tree:"#2f7d3f", box:"#2a2d33", clone:"#b59a2a",
+  gem:"#6cd7ff", player:"#5aa95c", puncher:"#ef4444",
+  weightless_box:"#315991", block_asset:"#5b2f14",
+};
+const ELEV_COLORS = ["#3a5e40", "#5d8a52", "#a2b957", "#e4c95b", "#e4c95b", "#e4c95b"];
+const PITCH_TILT = Math.atan2(1, 3);
+
+const wrap = document.getElementById("view3d");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#0b0d12");
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 500);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+wrap.appendChild(renderer.domElement);
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.position.set(10, 30, 6); scene.add(sun);
+const cube = new THREE.BoxGeometry(1,1,1);
+const slab = new THREE.BoxGeometry(1,0.35,1);
+const W = D.levelState.width, H = D.levelState.height;
+let elevMode = false;
+const meshes = [];
+function color(type, elev){ return elevMode ? ELEV_COLORS[Math.min(elev, ELEV_COLORS.length-1)] : (TYPE_COLORS[type] || "#888"); }
+function build(){
+  meshes.length = 0;
+  while (scene.children.length > 3) scene.remove(scene.children[3]);
+  D.levelState.terrain.forEach((row,y)=>row.forEach((cell,x)=>{
+    (cell.layers||[]).forEach((layer)=>{
+      const surf = ["floor","ice","exit"].includes(layer.type) && layer.elevation===0;
+      const m = new THREE.Mesh(surf?slab:cube,
+        new THREE.MeshLambertMaterial({ color: color(layer.type, layer.elevation) }));
+      m.position.set(x+0.5, surf?-0.225:layer.elevation+0.5, y+0.5);
+      scene.add(m);
+    });
+  }));
+  (D.views[0].render_state.actors||[]).forEach((a)=>{
+    let m;
+    if (a.type==="gem") m = new THREE.Mesh(new THREE.OctahedronGeometry(0.3),
+      new THREE.MeshLambertMaterial({ color:"#6cd7ff", emissive:"#1d6b8a" }));
+    else if (a.type==="player") m = new THREE.Mesh(new THREE.BoxGeometry(0.66,0.95,0.66),
+      new THREE.MeshLambertMaterial({ color:"#5aa95c" }));
+    else m = new THREE.Mesh(new THREE.BoxGeometry(0.86,0.86,0.86),
+      new THREE.MeshLambertMaterial({ color: color(a.type, a.elevation) }));
+    if (a.removed) return;
+    m.position.set(a.x+0.5, a.elevation+0.45, a.y+0.5);
+    scene.add(m);
+  });
+}
+build();
+
+const cam = { az:0, tilt:PITCH_TILT, dist:26 };
+const target = { az:0, tilt:PITCH_TILT, dist:26 };
+function place(){
+  const c = new THREE.Vector3(W/2, 0, H/2);
+  camera.position.set(
+    c.x + Math.sin(cam.az)*Math.sin(cam.tilt)*cam.dist,
+    c.y + Math.cos(cam.tilt)*cam.dist,
+    c.z + Math.cos(cam.az)*Math.sin(cam.tilt)*cam.dist);
+  camera.lookAt(c);
+}
+let dragging=false, px=0, py=0;
+renderer.domElement.addEventListener("pointerdown",(e)=>{dragging=true;px=e.clientX;py=e.clientY;});
+window.addEventListener("pointerup",()=>dragging=false);
+window.addEventListener("pointermove",(e)=>{
+  if(!dragging) return;
+  target.az -= (e.clientX-px)*0.008;
+  target.tilt = Math.min(1.45, Math.max(0.1, target.tilt+(e.clientY-py)*0.005));
+  px=e.clientX; py=e.clientY;
+});
+renderer.domElement.addEventListener("wheel",(e)=>{
+  e.preventDefault();
+  target.dist = Math.min(60, Math.max(8, target.dist+e.deltaY*0.03));
+},{passive:false});
+function resize(){
+  const w = wrap.clientWidth, h = 440;
+  renderer.setSize(w,h); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+(function loop(){
+  requestAnimationFrame(loop);
+  cam.az += (target.az-cam.az)*0.12;
+  cam.tilt += (target.tilt-cam.tilt)*0.12;
+  cam.dist += (target.dist-cam.dist)*0.12;
+  place(); renderer.render(scene,camera);
+})();
+
+// yaw 데모: 실제 엔진 관측 4장
+const yaw0Glyphs = new Set(D.views[0].level.replace(/\s/g,""));
+const btns = document.getElementById("yawbtns");
+const pre = document.getElementById("boardpre");
+function showView(i){
+  const v = D.views[i];
+  document.querySelectorAll("#yawbtns button").forEach((b,j)=>b.classList.toggle("active", j===i));
+  const TAU = Math.PI*2;
+  const desired = (v.yaw||0)*Math.PI/2;
+  const delta = ((desired-cam.az)%TAU+TAU+Math.PI)%TAU-Math.PI;
+  target.az = cam.az+delta; target.tilt = PITCH_TILT; target.dist = 26;
+  pre.innerHTML = v.level.split("\n").map(line=>
+    Array.from(line).map(ch=>{
+      if (ch===" ") return " ";
+      const c = D.glyphPalette[ch] || "#8a90a0";
+      const cls = !yaw0Glyphs.has(ch) ? ' class="hid"' : "";
+      return `<span${cls} style="color:${c}">${ch.replace("&","&amp;").replace("<","&lt;")}</span>`;
+    }).join("")
+  ).join("\n");
+}
+D.views.forEach((v,i)=>{
+  const b = document.createElement("button");
+  b.textContent = i===0 ? `yaw ${v.yaw} (시작)` : `yaw ${v.yaw}`;
+  b.onclick = ()=>showView(i);
+  btns.appendChild(b);
+});
+
+// 높이 토글
+const tg = document.getElementById("elevtoggle");
+tg.onclick = ()=>{
+  elevMode = !elevMode;
+  tg.textContent = `높이별 색칠: ${elevMode?"ON":"OFF"}`;
+  tg.classList.toggle("active", elevMode);
+  document.getElementById("elevlegend").style.display = elevMode?"flex":"none";
+  build();
+};
+
+resize();
+showView(0);
+</script>
+</body>
+</html>
