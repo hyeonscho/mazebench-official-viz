@@ -359,7 +359,9 @@ function renderPanels() {
     `보상 누적 <b style="color:var(--ink)">${cumReward.toFixed(2)}</b>`,
     `gem ${e.gems ?? 0}`,
     `push 누적 ${e.novelPushTotal ?? 0}`,
-    e.novelty != null ? `novelty <b style="color:var(--ink)">${e.novelty.toFixed(1)}%</b> (≤10%면 auto-quit)` : "",
+    e.novelty != null
+      ? `novelty <b style="color:var(--ink)">${e.novelty.toFixed(1)}%</b> (≤10%면 auto-quit)`
+      : (t > 0 ? `novelty <span style="color:var(--ink3)">집계 전 (100수 창 채우는 중)</span>` : ""),
     e.dead ? '<span class="badge b-dead">PLAYER DEAD</span>' : "",
     e.autoQuit ? '<span class="badge b-meta">AUTO-QUIT</span>' : "",
   ].filter(Boolean).map(s => `<span>${s}</span>`).join(" · ");
