@@ -181,6 +181,15 @@ const actorGroup = new THREE.Group();
 scene.add(terrainGroup, actorGroup);
 let actorMeshes = [];
 let W = 16, H = 16;
+let currentRoom = null;
+
+// A run can cross rooms; each room has its own terrain and actor roster.
+function ensureRoom(room) {
+  if (room === currentRoom) return;
+  currentRoom = room;
+  buildTerrain(RUN.levels[room]);
+  buildActors(RUN.actorsByRoom[room] || []);
+}
 
 function buildTerrain(levelState) {
   terrainGroup.clear();
@@ -200,9 +209,9 @@ function buildTerrain(levelState) {
   }));
 }
 
-function buildActors(run) {
+function buildActors(roster) {
   actorGroup.clear();
-  actorMeshes = run.actorsStatic.map((a) => {
+  actorMeshes = roster.map((a) => {
     let mesh;
     if (a.type === "gem") {
       mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.3),
@@ -339,6 +348,7 @@ function renderPanels() {
   document.getElementById("turnlabel").textContent = `턴 ${t} / ${N()}`;
   const cumReward = RUN.turns.slice(1, t + 1).reduce((s, x) => s + (x.reward || 0), 0);
   document.getElementById("metaline").innerHTML = [
+    `방 <b style="color:var(--ink)">${e.room || RUN.startRoom}</b>`,
     `yaw <b style="color:var(--ink)">${e.yaw ?? 0}</b>`,
     `보상 누적 <b style="color:var(--ink)">${cumReward.toFixed(2)}</b>`,
     `gem ${e.gems ?? 0}`,
@@ -399,6 +409,7 @@ function buildTicks() {
 function setTurn(v) {
   t = Math.min(N(), Math.max(0, v));
   slider.value = t;
+  ensureRoom(cur().room || RUN.startRoom);
   applyActors(cur());
   setCamMode("agent");
   syncAgentCam();
@@ -443,8 +454,8 @@ function loadRun(id) {
     auto ? `auto-quit @ ${auto.percentage.toFixed(1)}%` : "auto-quit 미발화",
     m.episodes > 1 ? `episode ${m.episode + 1}/${m.episodes}` : "",
   ].filter(Boolean).map(s => `<span class="chip">${s}</span>`).join("");
-  buildTerrain(RUN.levelState);
-  buildActors(RUN);
+  currentRoom = null;
+  ensureRoom(RUN.startRoom);
   slider.max = N();
   buildTicks();
   const sys = document.getElementById("sysprompt");
