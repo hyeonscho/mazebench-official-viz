@@ -98,6 +98,20 @@
     <b style="color:var(--ink2)">gpt-5.6-terra(max) 0💎/2방</b> · 출처 mazebench.com/leaderboard/ai
   </div>
 </header>
+<details style="margin:10px 20px 0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px" open>
+<summary style="cursor:pointer;font-weight:650">실험 요약 — 이 페이지는 "표준 eval 트랙(모델 단독)" 하한 베이스라인 기록이다</summary>
+<div style="font-size:13px;line-height:1.6;color:var(--ink2);padding:8px 2px 2px">
+<b style="color:var(--ink)">무엇을 돌렸나</b>: MazeBench 공식 표준 eval 프로토콜(시작 HxI · 256액션 · quit 금지 · novelty auto-quit · 공식 scorecard)의 충실 재현에서 gpt-5.6-terra(reasoning max, 멀티턴 세션) 3개 run.<br>
+<table style="border-collapse:collapse;margin:8px 0">
+<tr style="color:var(--ink3)"><td style="padding:2px 14px 2px 0">run</td><td style="padding:2px 14px">gems</td><td style="padding:2px 14px">방</td><td style="padding:2px 14px">novel push</td><td style="padding:2px 14px">reward</td></tr>
+<tr><td style="padding:2px 14px 2px 0">official-naive</td><td style="padding:2px 14px">0/88</td><td style="padding:2px 14px">1</td><td style="padding:2px 14px">28</td><td style="padding:2px 14px">1.4</td></tr>
+<tr><td style="padding:2px 14px 2px 0">official-react (준반복)</td><td style="padding:2px 14px">0/88</td><td style="padding:2px 14px">1</td><td style="padding:2px 14px">28</td><td style="padding:2px 14px">1.4</td></tr>
+<tr><td style="padding:2px 14px 2px 0;color:var(--ink)">permissive-react</td><td style="padding:2px 14px;color:var(--ink)">0/88</td><td style="padding:2px 14px;color:var(--ink)"><b>3</b></td><td style="padding:2px 14px;color:var(--ink)"><b>64</b></td><td style="padding:2px 14px;color:var(--ink)"><b>3.4</b></td></tr>
+</table>
+<b style="color:var(--ink)">발견</b>: ① ReAct식 가시적 think는 금지를 풀고 관례를 가르쳐도 0회 — reasoning 모델에서 그 축은 소멸(교란 재검 통과). ② 출력 형식 제약 완화만으로 방 1→3(1회 시행, 예비 — think 없이 올랐고 내부 추론량 변화도 불명확 = 메커니즘 미상). ③ 턴 234: "Planning return to HxH for gems" → go to level H H — 방 간 기억·계획은 존재, 그런데도 gem 0.<br><br>
+<b style="color:var(--ink)">이 기록의 위치</b>: 이 트랙은 모델 단독("한 줄 명령만") 조건의 <b>하한 베이스라인</b>이다. 리더보드는 다른 트랙(Agent 모드: 무제한 + 한 사고에 여러 수 + 도구 리그는 격리 Python으로 상태추적기·플래너 작성이 공식 <i>의무</i>)이며, 성적이 터지는 곳도 그쪽(sol 13💎/67방)이다. 프로젝트(neuro-symbolic 외부 구조)의 본판은 <b>Agent 모드 · 도구 리그</b>이고, 이 페이지의 수치는 그 대비를 위한 기준점으로 읽는다.
+</div>
+</details>
 
 <div id="scrub">
   <div class="row">
